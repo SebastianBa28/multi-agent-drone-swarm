@@ -20,13 +20,15 @@ Same controller, same safety filter, different target image each time.
 ## How it works ([`drone_show_sprite.py`](drone_show_sprite.py))
 
 ```
+                                                target
                    ┌───────┐    ┌───────────────┐    ┌─────────────┐
                    │ image │───►│ pixel targets │───►│ LQR nominal │
                    └───────┘    └───────────────┘    └──────┬──────┘
-                                         │
-                                         ▼
+                                                            │ a_nom
+                                                            ▼
+                 u1,u2                     a_safe
 ┌───────────────┐    ┌─────────────────────┐    ┌──────────────────────┐
-│ rotor thrusts │◄───│ flatness + attitude │◄───│ CBF-QP safety filter │
+│ rotor thrusts │◄───│ thrust/tilt mapping │◄───│ CBF-QP safety filter │
 └───────────────┘    └─────────────────────┘    └──────────────────────┘
 ```
 
