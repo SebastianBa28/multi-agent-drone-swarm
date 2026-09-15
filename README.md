@@ -20,34 +20,14 @@ Same controller, same safety filter, different target image each time.
 ## How it works ([`drone_show_sprite.py`](drone_show_sprite.py))
 
 ```
-┌───────┐
-│ image │
-└───┬───┘
-    │
-    ▼
-┌───────────────┐
-│ pixel targets │
-└───────┬───────┘
-        │
-        ▼
-┌─────────────┐
-│ LQR nominal │
-└──────┬──────┘
-       │
-       ▼
-┌──────────────────────┐
-│ CBF-QP safety filter │
-└───────────┬──────────┘
-            │
-            ▼
-┌─────────────────────┐
-│ flatness + attitude │
-└──────────┬──────────┘
-           │
-           ▼
-┌───────────────┐
-│ rotor thrusts │
-└───────────────┘
+                   ┌───────┐    ┌───────────────┐    ┌─────────────┐
+                   │ image │───►│ pixel targets │───►│ LQR nominal │
+                   └───────┘    └───────────────┘    └──────┬──────┘
+                                         │
+                                         ▼
+┌───────────────┐    ┌─────────────────────┐    ┌──────────────────────┐
+│ rotor thrusts │◄───│ flatness + attitude │◄───│ CBF-QP safety filter │
+└───────────────┘    └─────────────────────┘    └──────────────────────┘
 ```
 
 **1. Image → targets.** `load_sprite` reads a PNG/GIF and turns every opaque,
