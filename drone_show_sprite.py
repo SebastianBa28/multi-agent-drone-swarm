@@ -1,11 +1,14 @@
 import numpy as np
 import cvxpy as cp
+import osqp
+import scipy.sparse as sp_sparse
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.transforms as mtransforms
 from matplotlib.animation import FuncAnimation
 from scipy.integrate import solve_ivp
 from scipy.linalg import solve_continuous_are
+from scipy.optimize import linear_sum_assignment
 from PIL import Image
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -103,8 +106,8 @@ class WarmStartCBF:
         self.dp_p = cp.Parameter((self.npr, 2))     
         self.rhs_p = cp.Parameter(self.npr)        
 
-        cons = [self.dp_p[p] @ self.u[self.I[p]] - self.dp_p[p] @ self.u[self.J[p]]
-                >= self.rhs_p[p] for p in range(self.npr)]
+        diff_u = self.u[self.I] - self.u[self.J]
+        cons = [cp.sum(cp.multiply(self.dp_p, diff_u), axis=1) >= self.rhs_p]
         self.prob = cp.Problem(cp.Minimize(cp.sum_squares(self.u - self.un_p)), cons)
 
     def __call__(self, states, u_nom):
@@ -133,6 +136,77 @@ class WarmStartCBF:
             self.prob.solve(solver=cp.OSQP, warm_start=True)
             if self.prob.status in ['optimal', 'optimal_inaccurate'] and self.u.value is not None:
                 return self.u.value.copy()
+            return -_KD_BRAKE * states[:, 3:5]
+        except Exception:
+            return -_KD_BRAKE * states[:, 3:5]
+
+
+class SparseCBF:
+    """Active-set CBF-QP using direct OSQP with sparse matrices.
+
+    Rebuilds the QP each timestep using only pairs within D_sense, so the
+    problem scales as O(N * avg_neighbors) instead of O(N²). Tractable for
+    large N where WarmStartCBF runs out of memory or crashes the solver.
+    """
+    def __init__(self, N, D_s=0.6, D_sense=2.0, alpha1=3.0, gamma=3.0, epsilon=None):
+        self.N = N
+        self.D_s = D_s
+        self.D_sense = D_sense
+        self.alpha1 = alpha1
+        self.gamma = gamma
+        self.epsilon = epsilon
+        # Precompute all pair indices for vectorized distance checks
+        ii, jj = np.triu_indices(N, k=1)
+        self.I = ii
+        self.J = jj
+        # P matrix is fixed: 2*I_{2N}  (objective is ||u - u_nom||²)
+        self._P = sp_sparse.eye(2 * N, format='csc') * 2.0
+
+    def __call__(self, states, u_nom):
+        N = self.N
+        Pp = states[:, 0:2]
+        Vv = states[:, 3:5]
+
+        dp    = Pp[self.I] - Pp[self.J]
+        dv    = Vv[self.I] - Vv[self.J]
+        dist2 = np.sum(dp * dp, axis=1)
+
+        active = dist2 <= self.D_sense ** 2
+        if not np.any(active):
+            return u_nom.copy()
+
+        I_a    = self.I[active]
+        J_a    = self.J[active]
+        dp_a   = dp[active]
+        dv_a   = dv[active]
+        dist2_a = dist2[active]
+        n_a    = len(I_a)
+
+        rhs = (-2.0 * np.sum(dv_a * dv_a, axis=1)
+               - (self.gamma + self.alpha1) * (2.0 * np.sum(dp_a * dv_a, axis=1))
+               - self.alpha1 * self.gamma * (dist2_a - self.D_s ** 2))
+        if self.epsilon is not None:
+            rhs += (8.0 / self.epsilon) * dist2_a
+
+        # Sparse constraint matrix (n_a × 2N): 4 non-zeros per row
+        row_idx = np.repeat(np.arange(n_a), 4)
+        col_idx = np.stack([2*I_a, 2*I_a+1, 2*J_a, 2*J_a+1], axis=1).ravel()
+        vals    = np.stack([2*dp_a[:,0], 2*dp_a[:,1],
+                            -2*dp_a[:,0], -2*dp_a[:,1]], axis=1).ravel()
+        A_cbf = sp_sparse.csc_matrix((vals, (row_idx, col_idx)), shape=(n_a, 2*N))
+
+        q       = -2.0 * u_nom.ravel()
+        l       = rhs
+        u_bound = np.full(n_a, np.inf)
+
+        try:
+            solver = osqp.OSQP()
+            solver.setup(self._P, q, A_cbf, l, u_bound,
+                         verbose=False, max_iter=4000,
+                         eps_abs=1e-4, eps_rel=1e-4)
+            res = solver.solve()
+            if res.info.status in ('solved', 'solved_inaccurate') and res.x is not None:
+                return res.x.reshape(N, 2)
             return -_KD_BRAKE * states[:, 3:5]
         except Exception:
             return -_KD_BRAKE * states[:, 3:5]
@@ -217,16 +291,11 @@ class MultiQuadrotorSim:
         targets = np.array([inst.target for inst in self.instances])
 
         print(f"--- Starting Drone Show ---")
-        print(f"Agents: {N} | Active Collision Constraints: {int(N*(N-1)/2)}")
+        print(f"Agents: {N} | Pairs: {int(N*(N-1)/2)}")
         print(f"LQR nominal: K={np.round(_K,3)} (kp={_K[0]:.2f}, kd={_K[1]:.2f})")
-        print(f"CBF filter: {'warm-started (build once)' if warm_start else 'rebuild each step'}")
+        print(f"CBF filter: sparse active-set (D_sense={D_sense}m)")
 
-        # Build the warm-started QP once (cost amortized over the whole run)
-        cbf = None
-        if warm_start:
-            t_build = time.time()
-            cbf = WarmStartCBF(N, D_s=D_s, D_sense=D_sense, epsilon=epsilon)
-            print(f"  one-time QP build: {time.time()-t_build:.1f}s")
+        cbf = SparseCBF(N, D_s=D_s, D_sense=D_sense, epsilon=epsilon)
 
         start = time.time()
         last_k = n_steps - 1          # index of the final stored frame
@@ -244,10 +313,7 @@ class MultiQuadrotorSim:
             for i, inst in enumerate(self.instances):
                 u_nom[i] = lqr_control(current_states[i], inst.target, a_max=a_max)
 
-            if warm_start:
-                u_safe = cbf(current_states, u_nom)
-            else:
-                u_safe = solve_cbf_qp(current_states, u_nom, D_s=D_s, D_sense=D_sense, epsilon=epsilon)
+            u_safe = cbf(current_states, u_nom)
 
             for i, inst in enumerate(self.instances):
                 def dyn(t, x, accel=u_safe[i], p=inst.params):
@@ -429,19 +495,26 @@ def pixels_to_targets(pixels_rc, W, H, spacing=1.0, base_y=5.0):
         targets.append(np.array([tx, ty]))
     return targets
 
-def make_start_positions(N, width, spacing=1.0, top_y=-0.5, seed=42):
-    """Scrambled launch grid on the ground (>= D_s apart), shuffled so paths cross."""
-    cols = max(width, 1)
-    rows = int(np.ceil(N / cols))
-    slots = [np.array([(c - (cols - 1) / 2.0) * spacing, top_y - r * spacing])
-             for r in range(rows) for c in range(cols)]
-    rng = np.random.default_rng(seed)
-    rng.shuffle(slots)
-    return slots[:N]
+def make_start_positions(N, width, spacing=1.0, top_y=-0.5, targets=None):
+    """Build a launch grid with 2*N slots (width = 2*sprite_width) and use the
+    Hungarian algorithm to assign each drone to the slot nearest its target.
+    This minimises total travel distance and reduces unnecessary path crossings."""
+    cols = max(2 * width, 1)
+    rows = int(np.ceil(2 * N / cols))
+    slots = np.array([[(c - (cols - 1) / 2.0) * spacing, top_y - r * spacing]
+                      for c in range(cols) for r in range(rows)])  # (cols*rows, 2)
 
+    if targets is not None and len(targets) == N:
+        tgt = np.array(targets)                         # (N, 2)
+        # Cost matrix: squared distance from each slot to each target
+        cost = np.sum((slots[None, :, :] - tgt[:, None, :]) ** 2, axis=2)  # (N, slots)
+        _, col_ind = linear_sum_assignment(cost)
+        return [slots[j] for j in col_ind]
 
-
-
+    # Fallback: random shuffle (no targets provided)
+    rng = np.random.default_rng(42)
+    idx = rng.choice(len(slots), size=N, replace=False)
+    return [slots[i] for i in idx]
 
 def run_drone_show_scenario(sprite_path=None, target_width=None, spacing=1.0, base_y=5.0,
                             t_end=120.0, max_drones=45, warm_start=True,
@@ -461,7 +534,7 @@ def run_drone_show_scenario(sprite_path=None, target_width=None, spacing=1.0, ba
             f"`target_width` to downsample (currently capped at max_drones={max_drones}).")
 
     targets = pixels_to_targets(pixels_rc, W, H, spacing=spacing, base_y=base_y)
-    starts = make_start_positions(N, W, spacing=spacing)
+    starts = make_start_positions(N, W, spacing=spacing, targets=targets)
 
     print(f"Loaded '{sprite_path}': {W}x{H} sprite -> {N} drones")
 
