@@ -6,22 +6,47 @@ picture, while a centralized **Control Barrier Function (CBF)** safety filter
 provably keeps every pair of drones collision-free the whole way there. Built
 for Caltech's CDS 233 (Safety-Critical Control).
 
-<table>
-<tr>
-<td align="center"><img src="gifs/heart.gif" width="230"/><br/><sub>heart</sub></td>
-<td align="center"><img src="gifs/bike.gif" width="230"/><br/><sub>bike</sub></td>
-<td align="center"><img src="gifs/flamingo.gif" width="230"/><br/><sub>flamingo</sub></td>
-</tr>
-</table>
+<p align="center">
+  <img src="gifs/heart.gif" width="420"/>
+  <img src="gifs/bike.gif" width="420"/>
+  <br/>
+  <img src="gifs/flamingo.gif" width="420"/>
+  <img src="gifs/flappy_bird.gif" width="420"/>
+</p>
 
-Same controller, same safety filter, different target image each time. A
-larger example (`flappy_bird.gif`, 35 MB) lives in [`gifs/`](gifs/) but isn't
-embedded here to keep the page light.
+Same controller, same safety filter, different target image each time.
 
 ## How it works ([`drone_show_sprite.py`](drone_show_sprite.py))
 
 ```
-image  →  per-pixel targets  →  [ LQR nominal ]  →  [ centralized CBF-QP ]  →  [ flatness + attitude PD ]  →  rotor thrusts
+┌───────┐
+│ image │
+└───┬───┘
+    │
+    ▼
+┌───────────────┐
+│ pixel targets │
+└───────┬───────┘
+        │
+        ▼
+┌─────────────┐
+│ LQR nominal │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────────┐
+│ CBF-QP safety filter │
+└───────────┬──────────┘
+            │
+            ▼
+┌─────────────────────┐
+│ flatness + attitude │
+└──────────┬──────────┘
+           │
+           ▼
+┌───────────────┐
+│ rotor thrusts │
+└───────────────┘
 ```
 
 **1. Image → targets.** `load_sprite` reads a PNG/GIF and turns every opaque,
