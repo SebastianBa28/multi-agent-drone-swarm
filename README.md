@@ -19,7 +19,11 @@ Each of the $N$ agents is modeled as a **planar (2D) quadrotor**: position
 $(x, y)$, tilt angle $\theta$, and two rotor thrusts $u_1, u_2$ as the control
 input. The equations of motion are:
 
-$$m\ddot{x} = -(u_1+u_2)\sin\theta, \qquad m\ddot{y} = (u_1+u_2)\cos\theta - mg, \qquad I\ddot{\theta} = r(u_1-u_2)$$
+$$m\ddot{x} = -(u_1+u_2)\sin\theta$$
+
+$$m\ddot{y} = (u_1+u_2)\cos\theta - mg$$
+
+$$I\ddot{\theta} = r(u_1-u_2)$$
 
 with mass $m$, moment of inertia $I$, half-span $r$, and gravity $g$. Written
 as a state vector $z=(x,y,\theta,\dot x,\dot y,\dot\theta)$, this is a
@@ -52,9 +56,18 @@ matches launch positions to targets with the Hungarian algorithm
 and cutting down on avoidable path crossings before the safety filter even
 has to intervene.
 
-**Nominal controller.** Each drone is modeled as a 2D double integrator and
-steered toward its target by an LQR-optimal feedback law (`lqr_control`) —
-the best-in-class straight-line-home controller, ignoring other drones.
+**Nominal controller.** For planning, each drone is simplified to a 2D double
+integrator on position $p=(x,y)$:
+
+$$\dot p = v, \qquad \dot v = a$$
+
+Tracking is posed on the error state $\eta = (p - p_{des},\, v)$, and
+`lqr_control` applies the fixed LQR-optimal gain $K$ (solved once offline
+from this double-integrator model):
+
+$$a = -K\eta$$
+
+— the best-in-class straight-line-home controller, ignoring other drones.
 
 **Safety filter.** Collision avoidance is enforced pairwise:
 
