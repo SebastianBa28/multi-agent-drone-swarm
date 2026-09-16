@@ -53,10 +53,10 @@ constraint against every other.
 <p align="center">
   <img src="images/ames.png" width="220"/>
   <img src="figs/ames_preview.png" width="220"/>
-  <img src="figs/ames_drones.png" width="220"/>
+  <img src="gifs/ames.gif" width="220"/>
 </p>
 
-<p align="center"><sub><i>original photo &nbsp;→&nbsp; pixelated sprite (one target per pixel) &nbsp;→&nbsp; 540 drones in final position</i></sub></p>
+<p align="center"><sub><i>original photo &nbsp;→&nbsp; pixelated sprite (one target per pixel) &nbsp;→&nbsp; 540 drones assembling it live</i></sub></p>
 
 **Launch assignment.** Instead of a random scramble, `make_start_positions`
 matches launch positions to targets with the Hungarian algorithm
