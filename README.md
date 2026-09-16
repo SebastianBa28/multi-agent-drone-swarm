@@ -56,7 +56,7 @@ constraint against every other.
   <img src="figs/ames_drones.png" width="220"/>
 </p>
 
-<p align="center"><sub><i>original photo &nbsp;→&nbsp; pixelated sprite (one target per pixel) &nbsp;→&nbsp; 540 drones assembled into it</i></sub></p>
+<p align="center"><sub><i>original photo &nbsp;→&nbsp; pixelated sprite (one target per pixel) &nbsp;→&nbsp; 540 drones in final position</i></sub></p>
 
 **Launch assignment.** Instead of a random scramble, `make_start_positions`
 matches launch positions to targets with the Hungarian algorithm
