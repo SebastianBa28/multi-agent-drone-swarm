@@ -1,14 +1,15 @@
 # Multi-Agent Drone Swarm — Safety-Critical Control
 
-<img src="gifs/flamingo.gif" align="right" width="480"/>
-
 A 2D "drone show" simulator: give it any image, and a swarm of planar
 quadrotors — one per lit pixel — flies from a scrambled launch grid into that
 picture, while a centralized **Control Barrier Function (CBF)** safety filter
 provably keeps every pair of drones collision-free the whole way there. Built
 for Caltech's CDS 233 (Safety-Critical Control).
 
-<br clear="right"/>
+<p align="center">
+  <img src="gifs/bike.gif" width="380"/>
+  <img src="gifs/flamingo.gif" width="380"/>
+</p>
 
 ## Overview
 
