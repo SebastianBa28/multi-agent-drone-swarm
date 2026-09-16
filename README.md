@@ -13,6 +13,21 @@ for Caltech's CDS 233 (Safety-Critical Control).
 
 ## Overview
 
+### System Modeling
+
+Each of the $N$ agents is modeled as a **planar (2D) quadrotor**: position
+$(x, y)$, tilt angle $\theta$, and two rotor thrusts $u_1, u_2$ as the control
+input. The equations of motion are:
+
+$$m\ddot{x} = -(u_1+u_2)\sin\theta, \qquad m\ddot{y} = (u_1+u_2)\cos\theta - mg, \qquad I\ddot{\theta} = r(u_1-u_2)$$
+
+with mass $m$, moment of inertia $I$, half-span $r$, and gravity $g$. Written
+as a state vector $z=(x,y,\theta,\dot x,\dot y,\dot\theta)$, this is a
+control-affine system $\dot z = f(z) + g(z)u$ — the model every controller
+and the safety filter below act on.
+
+### Workflow
+
 ```
                                                 target
                    ┌───────┐    ┌───────────────┐    ┌─────────────┐
