@@ -19,11 +19,13 @@ Each of the $N$ agents is modeled as a **planar (2D) quadrotor**: position
 $(x, y)$, tilt angle $\theta$, and two rotor thrusts $u_1, u_2$ as the control
 input. The equations of motion are:
 
-$$m\ddot{x} = -(u_1+u_2)\sin\theta$$
-
-$$m\ddot{y} = (u_1+u_2)\cos\theta - mg$$
-
-$$I\ddot{\theta} = r(u_1-u_2)$$
+$$
+\begin{aligned}
+m\ddot{x} &= -(u_1+u_2)\sin\theta \\
+m\ddot{y} &= (u_1+u_2)\cos\theta - mg \\
+I\ddot{\theta} &= r(u_1-u_2)
+\end{aligned}
+$$
 
 with mass $m$, moment of inertia $I$, half-span $r$, and gravity $g$. Written
 as a state vector $z=(x,y,\theta,\dot x,\dot y,\dot\theta)$, this is a
@@ -83,9 +85,19 @@ $$a = -K\eta$$
 
 $$h_{ij}(x) = \lVert p_i - p_j \rVert^2 - D_s^2 \ge 0$$
 
-A centralized **CBF-QP** finds the smallest possible correction to every
-drone's LQR command that keeps all pairs safe, solved every timestep with
-`cvxpy`/`osqp`. Since a naive version scales quadratically with the number of
+Since $h_{ij}$ has relative degree 2, safety is enforced through the
+exponential CBF condition (poles at $-\alpha_1, -\gamma$):
+
+$$\ddot h_{ij} + (\alpha_1+\gamma)\dot h_{ij} + \alpha_1\gamma\, h_{ij} \ge 0$$
+
+which is affine in the accelerations, giving the centralized min-norm
+**CBF-QP**:
+
+$$\min_{a_1,\dots,a_N} \ \sum_i \lVert a_i - a_i^{nom}\rVert^2 \quad \text{s.t. above, } \forall\, i<j$$
+
+finding the smallest possible correction to every drone's LQR command that
+keeps all pairs safe, solved every timestep with `cvxpy`/`osqp`. Since a
+naive version scales quadratically with the number of
 drones, `SparseCBF` only builds a constraint for pairs within a sensing
 radius, keeping it tractable for swarms of hundreds of agents.
 
