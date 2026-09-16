@@ -7,12 +7,8 @@ provably keeps every pair of drones collision-free the whole way there. Built
 for Caltech's CDS 233 (Safety-Critical Control).
 
 <p align="center">
-  <img src="gifs/heart.gif" width="380"/>
-  <img src="gifs/bike.gif" width="380"/>
-</p>
-<p align="center">
-  <img src="gifs/flamingo.gif" width="380"/>
-  <img src="gifs/flappy_bird.gif" width="380"/>
+  <img src="gifs/heart.gif" width="48%"/>
+  <img src="gifs/flamingo.gif" width="48%"/>
 </p>
 
 Same controller, same safety filter, different target image each time.
