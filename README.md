@@ -52,7 +52,7 @@ constraint against every other.
 
 <p align="center">
   <img src="images/ames.png" width="220"/>
-  <img src="figs/ames.png" width="220"/>
+  <img src="figs/ames_preview.png" width="220"/>
   <img src="figs/ames_drones.png" width="220"/>
 </p>
 
