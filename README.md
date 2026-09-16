@@ -51,11 +51,11 @@ quadrotor — a 25×25 sprite means 625 agents, each with a pairwise safety
 constraint against every other.
 
 <p align="center">
-  <img src="images/ames.png" height="290"/>
-  &nbsp;&nbsp;&nbsp;<b>&rarr;</b>&nbsp;&nbsp;&nbsp;
-  <img src="figs/ames_preview.png" height="290"/>
-  &nbsp;&nbsp;&nbsp;<b>&rarr;</b>&nbsp;&nbsp;&nbsp;
-  <img src="gifs/ames.gif" height="290"/>
+  <img src="images/ames.png" height="290" align="middle"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>&#10230;</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="figs/ames_preview.png" height="290" align="middle"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>&#10230;</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="gifs/ames.gif" height="290" align="middle"/>
 </p>
 
 <p align="center"><sub><i>original photo &nbsp;→&nbsp; pixelated sprite (one target per pixel) &nbsp;→&nbsp; 540 drones assembling it live</i></sub></p>
