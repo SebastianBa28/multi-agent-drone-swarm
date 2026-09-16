@@ -1,6 +1,6 @@
 # Multi-Agent Drone Swarm — Safety-Critical Control
 
-<img src="gifs/flamingo.gif" align="right" width="360"/>
+<img src="gifs/flamingo.gif" align="right" width="480"/>
 
 A 2D "drone show" simulator: give it any image, and a swarm of planar
 quadrotors — one per lit pixel — flies from a scrambled launch grid into that
@@ -10,7 +10,7 @@ for Caltech's CDS 233 (Safety-Critical Control).
 
 <br clear="right"/>
 
-## How it works ([`drone_show_sprite.py`](drone_show_sprite.py))
+## Overview
 
 ```
                                                 target
