@@ -26,83 +26,35 @@ for Caltech's CDS 233 (Safety-Critical Control).
 └───────────────┘    └─────────────────────┘    └──────────────────────┘
 ```
 
-**1. Image → targets.** `load_sprite` reads a PNG/GIF and turns every opaque,
-non-background pixel into one drone's target `(x, y)` (`pixels_to_targets`).
-One lit pixel = one quadrotor — a 25×25 sprite means 625 agents, each with a
-pairwise safety constraint against every other.
+**Image → targets.** `load_sprite` turns every opaque, non-background pixel
+of an input image into one drone's target `(x, y)`. One lit pixel = one
+quadrotor — a 25×25 sprite means 625 agents, each with a pairwise safety
+constraint against every other.
 
-**2. Launch assignment via the Hungarian algorithm.** Rather than randomly
-scrambling starting positions, `make_start_positions` lays out a launch grid
-below the target image and solves an assignment problem — the cost matrix is
-squared distance from every launch slot to every target — with
-`scipy.optimize.linear_sum_assignment`. This minimizes total swarm travel
-distance and cuts down on avoidable path crossings before the safety filter
-even has to intervene.
+**Launch assignment.** Instead of a random scramble, `make_start_positions`
+matches launch positions to targets with the Hungarian algorithm
+(`scipy.optimize.linear_sum_assignment`), minimizing total travel distance
+and cutting down on avoidable path crossings before the safety filter even
+has to intervene.
 
-**3. Nominal controller — LQR.** Each drone is treated, for planning
-purposes, as a 2D double integrator ($\ddot p = a$). The output
-$y = p - p_{des}$ has *relative degree 2*, so tracking is posed on the
-extended state $\eta = [p - p_{des},\, v]$, with dynamics $\dot\eta = A\eta + Ba$
-($A=\begin{bmatrix}0&1\\0&0\end{bmatrix}$, $B=\begin{bmatrix}0\\1\end{bmatrix}$,
-decoupled per axis). Solving the CARE $A^\top P + PA - PBR^{-1}B^\top P + Q=0$
-once (`_build_lqr`) gives the infinite-horizon-optimal gain
-$K = R^{-1}B^\top P$, and every timestep each drone's nominal acceleration is
-simply $a = -K\eta$ — pulling it toward its target with critically-damped,
-optimal-in-the-LQR-sense gains.
+**Nominal controller.** Each drone is modeled as a 2D double integrator and
+steered toward its target by an LQR-optimal feedback law (`lqr_control`) —
+the best-in-class straight-line-home controller, ignoring other drones.
 
-**4. Safety filter — centralized min-norm CBF-QP.** Collision avoidance is one
-pairwise barrier per drone pair:
+**Safety filter.** Collision avoidance is enforced pairwise:
 
 $$h_{ij}(x) = \lVert p_i - p_j \rVert^2 - D_s^2 \ge 0$$
 
-Since control enters through acceleration, $h_{ij}$ has relative degree 2, so
-a first-derivative CBF condition doesn't apply — instead the filter enforces
-the **exponential / high-order CBF** condition (poles at $-\alpha_1,-\gamma$):
+A centralized **CBF-QP** finds the smallest possible correction to every
+drone's LQR command that keeps all pairs safe, solved every timestep with
+`cvxpy`/`osqp`. Since a naive version scales quadratically with the number of
+drones, `SparseCBF` only builds a constraint for pairs within a sensing
+radius, keeping it tractable for swarms of hundreds of agents.
 
-$$\ddot h_{ij} + (\alpha_1+\gamma)\dot h_{ij} + \alpha_1\gamma\, h_{ij} \ge 0$$
-
-which, writing $\Delta p = p_i-p_j,\ \Delta v = v_i-v_j$, expands to a
-constraint affine in the two drones' accelerations:
-
-$$2\Delta p\cdot a_i - 2\Delta p\cdot a_j \ \ge\ -2\lVert\Delta v\rVert^2 -2(\alpha_1+\gamma)\Delta p\cdot\Delta v -\alpha_1\gamma\left(\lVert\Delta p\rVert^2 - D_s^2\right)$$
-
-Stacking one such constraint per pair gives the centralized **min-norm safety
-filter**:
-
-$$\min_{a_1,\dots,a_N} \sum_i \lVert a_i - a_i^{nom}\rVert^2 \quad\text{s.t. the above, for every pair } i<j$$
-
-i.e. the least-restrictive correction to the LQR command that keeps every
-pair provably safe — solved every timestep. An optional `epsilon` parameter
-adds an **input-to-state safety (ISSf)** margin, tightening each constraint by
-$\tfrac{1}{\epsilon}\lVert L_g h_e\rVert^2 = \tfrac{8}{\epsilon}\lVert\Delta p\rVert^2$
-for robustness to model/actuation error.
-
-A dense $O(N^2)$ QP quickly becomes intractable as $N$ grows into the
-hundreds, so `SparseCBF` only generates a constraint for pairs within a
-sensing radius `D_sense` (all others are provably inert and skipped), builds
-the resulting sparse constraint matrix directly, and solves it with `osqp` —
-scaling as $O(N\cdot\text{avg. neighbors})$ instead of $O(N^2)$.
-
-**5. Acceleration → rotor thrusts: feedback linearization + differential
-flatness.** `map_accel_to_thrusts` converts the safe 2D acceleration into the
-two rotor thrusts $u_1,u_2$ in two steps. The desired total thrust and tilt
-angle come from the quadrotor's differential flatness,
-$T = m\sqrt{a_x^2+(a_y+g)^2}$, $\theta_d=\text{atan2}(-a_x,\ a_y+g)$ — exact
-*if* $\theta=\theta_d$ instantaneously. Making that (approximately) true is
-the job of the attitude loop: since $\ddot\theta = r(u_1-u_2)/I$ exactly, with
-no other terms, commanding `torque = I * (kp_th*(theta_d-theta) - kd_th*theta_dot)`
-and solving $u_1-u_2=\text{torque}/r$ is an **exact input-output feedback
-linearization** of the rotational dynamics — it makes $\ddot\theta$ track the
-PD virtual control exactly. The gains are set deliberately high
-(`kp_th, kd_th = 100.0, 15.0`) precisely so this inner loop is fast enough to
-make the outer flatness assumption ($\theta\approx\theta_d$) hold in practice.
-
-**6. Early stopping & rendering.** The sim terminates as soon as every drone
-is within `converge_pos_tol` of its target and nearly stopped (held for a few
-steps to reject transients), instead of always running the full horizon.
-`animate()` renders the swarm, optionally hiding each target's marker until
-the drone actually arrives (`reveal_at_end`), and exports a GIF via
-`matplotlib`'s Pillow writer.
+**Thrust mapping.** The safe acceleration is converted into rotor thrusts via
+the quadrotor's differential flatness (desired thrust magnitude and tilt
+angle) plus a fast attitude PD loop — an exact feedback linearization of the
+rotational dynamics that makes the flatness approximation hold in practice.
 
 ## Running it
 
